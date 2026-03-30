@@ -3,11 +3,7 @@
 -- Baby-foot tracker 1v1 / 2v2
 -- ============================================
 
-SELECT 'CREATE DATABASE "BeeFootFlow" TEMPLATE template0'
-WHERE NOT EXISTS (
-    SELECT 1 FROM pg_database WHERE datname = 'BeeFootFlow'
-)\gexec
-\c BeeFootFlow
+\c beefootflowdb;
 
 -- Extension pour UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -44,8 +40,8 @@ CREATE TABLE IF NOT EXISTS users (
 -- ============================================
 CREATE TABLE IF NOT EXISTS matches (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    score_team_a INTEGER NOT NULL DEFAULT 0 CHECK (score_team_a <= 10),
-    score_team_b INTEGER NOT NULL DEFAULT 0 CHECK (score_team_b <= 10),
+    score_team_a INTEGER NOT NULL DEFAULT 0 CHECK (score_team_a >= 0 AND score_team_a <= 10),
+    score_team_b INTEGER NOT NULL DEFAULT 0 CHECK (score_team_b >= 0 AND score_team_b <= 10),
     goal_limit INTEGER NOT NULL DEFAULT 10,
     avg_ball_speed DECIMAL(6,2),
     avg_time_between_goals INTEGER,
@@ -63,7 +59,7 @@ CREATE TABLE IF NOT EXISTS match_players (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     match_id UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    team VARCHAR(1) NOT NULL CHECK (team IN ('A','B')),
+    team CHAR(1) NOT NULL CHECK (team IN ('A','B')),
     UNIQUE(match_id, user_id)
 );
 
@@ -73,7 +69,7 @@ CREATE TABLE IF NOT EXISTS match_players (
 CREATE TABLE IF NOT EXISTS goals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     match_id UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
-    team VARCHAR(1) NOT NULL CHECK (team IN ('A','B')),
+    team CHAR(1) NOT NULL CHECK (team IN ('A','B')),
     ball_speed DECIMAL(6,2),
     time_since_last_goal INTEGER,
     scored_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -95,7 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_matches_created ON matches(created_at DESC);
 CREATE OR REPLACE FUNCTION update_user_stats()
 RETURNS TRIGGER AS $$
 DECLARE
-    winner_team CHAR;
+    winner_team CHAR(1);
     rec RECORD;
     new_elo INTEGER;
 BEGIN
@@ -150,7 +146,7 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_update_user_stats
 AFTER UPDATE OF status ON matches
 FOR EACH ROW
-WHEN (NEW.status = 'finished')
+WHEN (OLD.status IS DISTINCT FROM 'finished' AND NEW.status = 'finished')
 EXECUTE FUNCTION update_user_stats();
 
 -- ============================================
